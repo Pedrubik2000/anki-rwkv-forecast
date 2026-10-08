@@ -1,5 +1,7 @@
 # RWKV forecast for Anki
 
+> **No longer maintained (October 2026).** This add-on will not receive updates or fixes. It still works as released; feel free to fork it.
+
 Under **RWKV-Instant** a review card is due when its live RWKV recall drops below the desired
 retention, so cards have no due dates and Anki can't show what is coming. This add-on shows it.
 

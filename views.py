@@ -37,7 +37,7 @@ def _a(cids, text, cls=""):
 
 
 def deck_list_text(fc: Forecast | None, conf: dict, status: str) -> str:
-    """`due | near | safe` now, then the count line."""
+    """`due | near | safe` now, then the count line, then the recall graph (`deck_list_graph`)."""
     head = f'<b>RWKV forecast</b> <span class="note">{NOTE}'
     if fc is None or not fc.cards:
         msg = status or ("no review cards" if fc is not None else "computing…")
@@ -60,8 +60,54 @@ def deck_list_text(fc: Forecast | None, conf: dict, status: str) -> str:
         tom = split(fc, cids, fc.index("tomorrow"), margin)["due"]
         parts.append(" · ".join([_a(now["due"], f"due {len(now['due'])}", "due"), *soon,
                                  _a(tom, f"{len(tom)} by tomorrow")]))
+    graph = deck_list_graph(fc, conf) if conf.get("deck_list_graph", True) else ""
     return (f'<div id="rwkvfc"><style>{CSS}</style><div>{head}</span></div>'
-            + "".join(f"<div>{p}</div>" for p in parts) + "</div>")
+            + "".join(f"<div>{p}</div>" for p in parts) + graph + "</div>")
+
+
+GRAPH_CSS = """
+#rwkvfc fieldset { width: 520px; max-width: 90vw; box-sizing: border-box; margin: .6em auto 0; padding: 4px 10px 6px;
+  border: 1px solid rgba(128,128,128,.5); border-radius: 4px; }
+#rwkvfc legend { font-size: .85em; opacity: .7; padding: 0 4px; }
+#rwkvfc .recall { position: relative; margin: 6px 4px 0; border-bottom: 1px solid #999; }
+#rwkvfc .recall i { position: absolute; width: 6px; height: 6px; border-radius: 50%; margin-left: -3px; }
+#rwkvfc .recall i.due { background: #e53935; } #rwkvfc .recall i.near { background: #e65100; }
+#rwkvfc .recall i.safe { background: #43a047; }
+#rwkvfc .recall b { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #e53935; }
+#rwkvfc .recall s { position: absolute; top: 0; bottom: 0; background: rgba(230, 81, 0, .16); }
+#rwkvfc .axis { position: relative; height: 14px; margin: 0 4px; font-size: 10px; opacity: .7; }
+#rwkvfc .axis span { position: absolute; transform: translateX(-50%); }
+#rwkvfc .axis span:first-child { transform: none; } #rwkvfc .axis span:last-child { transform: translateX(-100%); }
+"""
+
+
+def deck_list_graph(fc: Forecast, conf: dict) -> str:
+    """kuma3 desktop's RWKV recall box: a dot per review card at its recall now, stacked where they meet,
+    a red line at each desired retention and the "near" band beside it."""
+    lo, margin = float(conf["bar_axis_min"]), float(conf["near_margin"])
+    pct = lambda r: max(0.0, min(1.0, (r - lo) / (1 - lo))) * 100
+    order = sorted(fc.cards, key=lambda c: fc.cards[c]["r"][0])
+    bins = [int(pct(fc.cards[c]["r"][0]) / 0.9) for c in order]  # about a dot wide
+    tallest = max((bins.count(b) for b in set(bins)), default=1)
+    step = min(7.0, 60 / max(1, tallest))
+    stacks: dict[int, int] = {}
+    dots = []
+    for cid, b in zip(order, bins):
+        r, t = fc.cards[cid]["r"][0], fc.cards[cid]["target"]
+        n = stacks[b] = stacks.get(b, 0) + 1
+        k = "due" if r < t else "near" if r < t + margin else "safe"
+        dots.append(f'<i class="{k}" style="left:{pct(r):.2f}%;bottom:{(n - 1) * step + 1:.1f}px"'
+                    f' title="R {r * 100:.1f}%"></i>')
+    lines = "".join(
+        f'<s style="left:{pct(t):.2f}%;width:{pct(t + margin) - pct(t):.2f}%"></s><b style="left:{pct(t):.2f}%"></b>'
+        for t in sorted({fc.cards[c]["target"] for c in order})
+    )
+    ticks = "".join(f'<span style="left:{k * 25}%">{round((lo + (1 - lo) * k / 4) * 100)}%</span>' for k in range(5))
+    return (
+        f"<style>{GRAPH_CSS}</style><fieldset><legend>RWKV recall now · red line = desired retention</legend>"
+        f'<div class="recall" style="height:{(tallest - 1) * step + 10:.0f}px">{lines}{"".join(dots)}</div>'
+        f'<div class="axis">{ticks}</div></fieldset>'
+    )
 
 
 # ---------------------------------------------------------------- deck options bar

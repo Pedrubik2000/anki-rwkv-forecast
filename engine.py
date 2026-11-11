@@ -1,7 +1,7 @@
 """The forecast calculation: projected RWKV recall for every review card at future times.
 
 All calls into the fork's private RWKV code live here (aqt.rwkv_scheduler of the JSchoreels
-FSRS-7 fork, 26.09.3+fsrs7 build 96).
+FSRS-7 fork, 26.09.3+fsrs7 build 100).
 The fork scores a card with a *query* input that carries the time since its last review
 (current_elapsed_seconds / _days) and today's day number (day_offset). A forecast is the same
 query with the clock moved forward: the model's state is not touched, so every number means

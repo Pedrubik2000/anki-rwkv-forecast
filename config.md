@@ -12,6 +12,8 @@ moves. "This deck" overrides are not applied to the Selected column.
 
 - `enabled`: show the deck-list text.
 - `count_line`: show the count line in the deck list.
+- `deck_list_graph`: show the dot graph (one dot per card at its recall now, red line at the desired
+  retention) in the deck list too.
 - `near_margin`: "near" = recall between the target and target + this (0.03 = 3 points).
 - `bar_axis_min`: left end of the deck options recall axis (0.6 = 60%).
 - `max_age_minutes`: recompute when the forecast is older than this (or after any review or change).

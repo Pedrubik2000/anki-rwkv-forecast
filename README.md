@@ -16,6 +16,8 @@ due 62 · +3 in 1 h · +8 in 3 h · 70 by tomorrow
 - `due`: recall below the target now. `near`: within 3 points above it. `safe`: the rest.
 - `+N in 1 h / 3 h`: not due now, due by then. `by tomorrow`: due at the next day rollover.
 - Click a number to open those cards in the Browser.
+- Below it, the **RWKV recall** box: one dot per review card at its recall now, a red line at each desired
+  retention and the "near" band beside it. Turn it off with `deck_list_graph` in the config.
 
 **Deck options** (under Desired retention): due / near / safe for the preset's review cards at the
 current desired retention and at the one you are typing, live, before you save, plus a dot bar

@@ -1,6 +1,7 @@
 {
     "enabled": true,
     "count_line": true,
+    "deck_list_graph": true,
     "near_margin": 0.03,
     "bar_axis_min": 0.6,
     "max_age_minutes": 5

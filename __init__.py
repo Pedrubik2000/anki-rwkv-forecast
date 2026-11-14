@@ -114,8 +114,10 @@ def refresh() -> None:
         if mw.state == "deckBrowser":
             _update_deck_list()
         _answer_dr()
-        if S.again:
+        # a render during the run asked again: only rerun if this result no longer answers it
+        if S.again and not _fresh():
             QTimer.singleShot(0, refresh)
+        S.again = False
 
     def result(fut):
         try:

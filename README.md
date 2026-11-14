@@ -33,6 +33,7 @@ recall, so the forecast is recomputed after reviews.
   The add-on uses the fork's internal RWKV code (`aqt.rwkv_scheduler`), so other builds may need
   changes in `engine.py`. It does nothing useful on official Anki.
 - Read-only: it never writes cards.
+- Performance: on fork builds with `project_rwkv_recall` (the recall projection API) the forecast runs off the collection executor, waits instead of restarting when RWKV is busy, and stops while you review. Older builds keep the previous behavior (internal helpers, holding the collection while it runs).
 
 ## How it works
 

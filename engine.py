@@ -1,7 +1,11 @@
 """The forecast calculation: projected RWKV recall for every review card at future times.
 
-All calls into the fork's private RWKV code live here (aqt.rwkv_scheduler of the JSchoreels
-FSRS-7 fork, 26.09.3+fsrs7 build 100).
+All calls into the fork's RWKV code live here (aqt.rwkv_scheduler of the JSchoreels FSRS-7 fork).
+Newer fork builds provide the public `project_rwkv_recall` API (see "Recall Projection (add-on API)"
+in the fork's docs/rwkv.MD): it runs off the collection executor, waits for the backend between
+chunks instead of failing, and can be cancelled. `compute()` uses it when it exists. Older builds
+(26.09.3+fsrs7 build 100 and before) keep the previous implementation, which calls the fork's
+private helpers (`_compute_legacy`).
 The fork scores a card with a *query* input that carries the time since its last review
 (current_elapsed_seconds / _days) and today's day number (day_offset). A forecast is the same
 query with the clock moved forward: the model's state is not touched, so every number means
@@ -23,6 +27,10 @@ WARMUP_TIMEOUT_SECS = 120
 
 class Busy(Exception):
     """The RWKV backend is warming up or busy (e.g. right after an answer); try again soon."""
+
+
+class Cancelled(Exception):
+    """The run was cancelled (e.g. the user started reviewing); nothing was computed."""
 
 
 @dataclass
@@ -55,9 +63,57 @@ def _shift(inp, secs: int, days: int):
     )
 
 
-def compute(mw, offsets: list[tuple[str, int | None]], search: str = REVIEW_SEARCH) -> Forecast:
+def uses_api() -> bool:
+    """True when this fork build has the public recall projection API."""
+    return hasattr(rs, "project_rwkv_recall")
+
+
+def compute(
+    mw,
+    offsets: list[tuple[str, int | None]],
+    search: str = REVIEW_SEARCH,
+    cancel_event=None,
+) -> Forecast:
     """Run in a background thread. `offsets` = [(label, seconds from now)], first one ("now", 0);
-    seconds None = the next day rollover (Anki's "tomorrow")."""
+    seconds None = the next day rollover (Anki's "tomorrow").
+    With the API the thread must not hold the collection executor (uses_collection=False); the legacy
+    path needs it (uses_collection=True) and ignores `cancel_event`."""
+    if uses_api():
+        return _compute_api(mw, offsets, search, cancel_event)
+    return _compute_legacy(mw, offsets, search)
+
+
+def _compute_api(mw, offsets, search, cancel_event) -> Forecast:
+    res = rs.project_rwkv_recall(
+        mw,
+        search=search,
+        offsets_seconds=[s for _, s in offsets],
+        cancel_event=cancel_event,
+    )
+    status = res.get("status")
+    reason = res.get("reason") or status
+    if status in ("pending", "stale"):
+        raise Busy(reason)
+    if status == "cancelled":
+        raise Cancelled()
+    if status != "ready":  # "unavailable" or anything unexpected
+        raise RuntimeError(reason)
+    fc = Forecast(
+        taken=res["taken"],
+        offsets=list(res["offsets_seconds"]),
+        labels=[l for l, _ in offsets],
+        elapsed_ms=res.get("elapsed_ms", 0.0),
+        phases={"api": res.get("elapsed_ms", 0.0)},
+    )
+    for c in res["cards"]:
+        if any(r is None for r in c["recall"]):  # the views compare every value
+            continue
+        fc.cards[c["card_id"]] = dict(did=c["deck_id"], target=c["target_retention"], r=list(c["recall"]))
+    return fc
+
+
+def _compute_legacy(mw, offsets: list[tuple[str, int | None]], search: str = REVIEW_SEARCH) -> Forecast:
+    """Older fork builds: score through the private helpers, holding the collection executor."""
     start = time.monotonic()
     mark = [start]
     phases = {}
